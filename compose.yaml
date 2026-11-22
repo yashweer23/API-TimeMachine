@@ -1,0 +1,92 @@
+name: api-timemachine
+services:
+  db:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_USER: timemachine
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-development-only}
+      POSTGRES_DB: timemachine
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5434}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U timemachine -d timemachine"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  sample-api:
+    build: ./sample-api
+    environment:
+      API_VERSION: v1
+    ports:
+      - "127.0.0.1:${SAMPLE_API_PORT:-8003}:8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+  sample-api-v2:
+    build: ./sample-api
+    environment:
+      API_VERSION: v2
+    ports:
+      - "127.0.0.1:${SAMPLE_API_V2_PORT:-8004}:8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://timemachine:${POSTGRES_PASSWORD:-local-development-only}@db:5432/timemachine
+      ALLOWED_TARGET_ORIGINS: ${ALLOWED_TARGET_ORIGINS:-http://sample-api:8001,http://sample-api-v2:8001}
+      DEV_PRIVATE_ORIGINS: ${DEV_PRIVATE_ORIGINS:-http://sample-api:8001,http://sample-api-v2:8001}
+      DEV_PRIVATE_CIDRS: ${DEV_PRIVATE_CIDRS:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
+      CORS_ORIGINS: http://localhost:${WEB_PORT:-5175},http://127.0.0.1:${WEB_PORT:-5175},http://localhost:${BACKEND_PORT:-8002},http://127.0.0.1:${BACKEND_PORT:-8002}
+      TRUSTED_HOSTS: localhost,127.0.0.1,backend
+      REDACT_FIELDS: ${REDACT_FIELDS:-}
+      CONNECT_TIMEOUT_SECONDS: ${CONNECT_TIMEOUT_SECONDS:-3}
+      READ_TIMEOUT_SECONDS: ${READ_TIMEOUT_SECONDS:-10}
+      TOTAL_TIMEOUT_SECONDS: ${TOTAL_TIMEOUT_SECONDS:-20}
+      MAX_RESPONSE_BYTES: ${MAX_RESPONSE_BYTES:-1048576}
+      MAX_REQUEST_BYTES: ${MAX_REQUEST_BYTES:-262144}
+      SAMPLE_V1_BASE_URL: ${SAMPLE_V1_BASE_URL:-http://sample-api:8001}
+      SAMPLE_V2_BASE_URL: ${SAMPLE_V2_BASE_URL:-http://sample-api-v2:8001}
+      MAX_EXECUTIONS_PER_MINUTE: ${MAX_EXECUTIONS_PER_MINUTE:-120}
+      MAX_CONCURRENT_REQUESTS: ${MAX_CONCURRENT_REQUESTS:-8}
+      REPLAY_MAX_BATCH_SIZE: ${REPLAY_MAX_BATCH_SIZE:-10}
+      REPLAY_SESSION_TIMEOUT_SECONDS: ${REPLAY_SESSION_TIMEOUT_SECONDS:-120}
+      REPLAY_MAX_CONCURRENT_SESSIONS: ${REPLAY_MAX_CONCURRENT_SESSIONS:-2}
+    depends_on:
+      db:
+        condition: service_healthy
+      sample-api:
+        condition: service_healthy
+      sample-api-v2:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8002}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+      start_period: 10s
+    restart: unless-stopped
+  frontend:
+    build: ./frontend
+    environment:
+      API_PROXY_TARGET: http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${WEB_PORT:-5175}:5175"
+    restart: unless-stopped
+volumes:
+  postgres_data:

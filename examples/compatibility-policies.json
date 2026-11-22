@@ -1,0 +1,14 @@
+{
+  "endpoints": [
+    {"method":"GET","endpoint_path":"/compatibility/unchanged","expected_status_codes":[200],"required_json_paths":["/id"],"expected_types":{"/id":"integer"}},
+    {"method":"GET","endpoint_path":"/compatibility/required-removed","required_json_paths":["/id"]},
+    {"method":"GET","endpoint_path":"/compatibility/type","expected_types":{"/age":"integer"}},
+    {"method":"GET","endpoint_path":"/compatibility/added","allow_additional_fields":true},
+    {"method":"GET","endpoint_path":"/compatibility/value","expected_status_codes":[200]},
+    {"method":"GET","endpoint_path":"/compatibility/status","expected_status_codes":[200,201]},
+    {"method":"GET","endpoint_path":"/compatibility/error","expected_status_codes":[200]},
+    {"method":"GET","endpoint_path":"/compatibility/header","required_headers":["x-contract"]},
+    {"method":"GET","endpoint_path":"/compatibility/timestamp","dynamic_json_paths":["/generated_at"]},
+    {"method":"GET","endpoint_path":"/compatibility/transport","expected_status_codes":[200]}
+  ]
+}
